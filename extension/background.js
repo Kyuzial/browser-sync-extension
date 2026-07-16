@@ -229,7 +229,7 @@ function flattenBookmarks(nodes, parentPath = '') {
 }
 
 /** Perform robust 3-way merge on bookmarks. */
-async function syncBookmarks() {
+async function syncBookmarks(forceUpload = false) {
   if (isSyncingBookmarks) {
     return { success: true, skipped: true };
   }
@@ -259,7 +259,6 @@ async function syncBookmarks() {
 
     const toCreateLocally = [];
     const toDeleteLocally = [];
-    const toUpload = [];
 
     const allKeys = new Set([
       ...localMap.keys(),
@@ -267,31 +266,24 @@ async function syncBookmarks() {
       ...lastMap.keys()
     ]);
 
-    for (const key of allKeys) {
-      const loc = localMap.get(key);
-      const srv = serverMap.get(key);
-      const lst = lastMap.get(key);
+    if (!forceUpload) {
+      for (const key of allKeys) {
+        const loc = localMap.get(key);
+        const srv = serverMap.get(key);
+        const lst = lastMap.get(key);
 
-      if (loc && srv) {
-        let title = srv.title;
-        if (lst && loc.title !== lst.title) {
-          title = loc.title;
-        }
-        toUpload.push({ url: loc.url, title, folder_path: loc.folder_path });
-      } else if (loc && !srv) {
-        if (lst) {
-          toDeleteLocally.push(loc);
+        if (loc) {
+          if (lst && srv && srv.deleted) {
+            toDeleteLocally.push(loc);
+          }
         } else {
-          toUpload.push(loc);
-        }
-      } else if (!loc && srv) {
-        if (lst) {
-          // Was deleted locally, so do not upload (server will remove it)
-        } else {
-          toCreateLocally.push(srv);
-          toUpload.push(srv);
+          if (!lst && srv && !srv.deleted) {
+            toCreateLocally.push(srv);
+          }
         }
       }
+    } else {
+      console.log('[BrowserSync] Force uploading local bookmarks...');
     }
 
     // 4. Apply deletions locally
@@ -369,6 +361,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         case 'syncAll': {
           const result = await syncBookmarks();
           sendResponse({ bookmarks: result });
+          break;
+        }
+
+        case 'forceSync': {
+          const result = await syncBookmarks(true);
+          sendResponse(result);
           break;
         }
 

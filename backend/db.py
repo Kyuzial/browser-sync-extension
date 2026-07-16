@@ -5,8 +5,6 @@ import sqlite3
 from collections.abc import Generator
 from contextlib import contextmanager
 
-DB_PATH = os.getenv("DB_PATH", "sync.db")
-
 # ── Schema ──────────────────────────────────────────────────────
 
 _SCHEMA = """
@@ -43,7 +41,8 @@ def init_db() -> None:
 
 def _restrict_db_permissions() -> None:
     """Keep bookmark data and key hashes readable only by the service account."""
-    for path in (DB_PATH, f"{DB_PATH}-wal", f"{DB_PATH}-shm"):
+    db_path = os.getenv("DB_PATH", "sync.db")
+    for path in (db_path, f"{db_path}-wal", f"{db_path}-shm"):
         try:
             os.chmod(path, 0o600)
         except FileNotFoundError:
@@ -53,7 +52,8 @@ def _restrict_db_permissions() -> None:
 @contextmanager
 def get_db() -> Generator[sqlite3.Connection, None, None]:
     """Yield a SQLite connection with row factory set, auto-commits on success."""
-    conn = sqlite3.connect(DB_PATH)
+    db_path = os.getenv("DB_PATH", "sync.db")
+    conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
@@ -168,11 +168,11 @@ def upsert_bookmarks(
 
 
 def get_bookmarks(key_id: int) -> list[sqlite3.Row]:
-    """Return all active bookmarks for a device."""
+    """Return all bookmarks for a device, including soft deletes."""
     with get_db() as conn:
         return conn.execute(
-            "SELECT id, url, title, folder_path, created_at, updated_at "
-            "FROM bookmarks WHERE key_id = ? AND deleted = 0 "
+            "SELECT id, url, title, folder_path, created_at, updated_at, deleted "
+            "FROM bookmarks WHERE key_id = ? "
             "ORDER BY folder_path, title",
             (key_id,),
         ).fetchall()

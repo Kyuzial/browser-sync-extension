@@ -24,6 +24,7 @@ class BookmarkOut(BaseModel):
     folder_path: str
     created_at: str
     updated_at: str
+    deleted: bool
 
 
 class BookmarkSyncResponse(BaseModel):

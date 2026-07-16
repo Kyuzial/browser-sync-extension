@@ -17,17 +17,13 @@ import sys
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from starlette.requests import Request
-
 from dotenv import load_dotenv
-
-load_dotenv()
-
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
+from starlette.requests import Request
 
 import db
 from auth import generate_key, get_current_key, hash_key
@@ -37,6 +33,8 @@ from models import (
     BookmarkSyncResponse,
     HealthResponse,
 )
+
+load_dotenv()
 
 # ── Rate limiter ────────────────────────────────────────────────
 

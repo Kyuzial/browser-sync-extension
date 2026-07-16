@@ -100,6 +100,16 @@ All data endpoints require `Authorization: Bearer <api-key>` header.
 └── README.md
 ```
 
+## Development
+
+This project uses `ruff` for code formatting and linting.
+
+```bash
+cd backend
+pip install ruff
+ruff check .
+```
+
 ## License
 
 MIT

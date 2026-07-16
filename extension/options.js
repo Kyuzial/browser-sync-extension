@@ -15,6 +15,7 @@ const toggleKeyBtn       = $('#toggleKeyVisibility');
 const testConnectionBtn  = $('#testConnectionBtn');
 const connectionResult   = $('#connectionResult');
 const autoSyncBookmarks  = $('#autoSyncBookmarks');
+const forceSyncBtn       = $('#forceSyncBtn');
 const saveBtn            = $('#saveBtn');
 const toast              = $('#toast');
 
@@ -156,6 +157,31 @@ testConnectionBtn.addEventListener('click', async () => {
 function setResult(message, success) {
   connectionResult.textContent = message;
   connectionResult.className = `connection-result ${success ? 'success' : 'error'}`;
+}
+
+// ---------------------------------------------------------------------------
+// Force Sync
+// ---------------------------------------------------------------------------
+
+if (forceSyncBtn) {
+  forceSyncBtn.addEventListener('click', async () => {
+    forceSyncBtn.disabled = true;
+    forceSyncBtn.textContent = 'Uploading…';
+    
+    try {
+      const response = await chrome.runtime.sendMessage({ action: 'forceSync' });
+      if (response && response.success) {
+        showToast(`✓ Force upload successful (${response.count} bookmarks)`);
+      } else {
+        showToast(`✗ Force upload failed: ${response?.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      showToast(`✗ Error: ${err.message}`);
+    } finally {
+      forceSyncBtn.disabled = false;
+      forceSyncBtn.textContent = 'Force Upload';
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------
