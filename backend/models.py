@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 
 class BookmarkIn(BaseModel):
-    url: str = Field(..., min_length=1, max_length=2048)
+    url: str = Field(..., min_length=1, max_length=65_536)
     title: str = Field("", max_length=512)
     folder_path: str = Field(
         "", max_length=1024, description="e.g. 'Bookmarks Bar/Recipes'"
