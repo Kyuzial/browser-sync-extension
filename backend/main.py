@@ -203,7 +203,7 @@ def _run_server() -> None:
         "main:app",
         host=os.getenv("HOST", "0.0.0.0"),
         port=int(os.getenv("PORT", "8000")),
-        reload=True,
+        reload=os.getenv("RELOAD", "false").lower() == "true",
     )
 
 
