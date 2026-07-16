@@ -70,6 +70,7 @@ def get_db() -> Generator[sqlite3.Connection, None, None]:
 
 # ── API key queries ─────────────────────────────────────────────
 
+
 def insert_api_key(device_name: str, key_hash: str) -> int:
     """Insert a new API key and return its id."""
     with get_db() as conn:
@@ -84,7 +85,8 @@ def get_key_by_hash(key_hash: str) -> sqlite3.Row | None:
     """Look up an API key row by its hash."""
     with get_db() as conn:
         return conn.execute(
-            "SELECT * FROM api_keys WHERE key_hash = ? AND revoked_at IS NULL", (key_hash,)
+            "SELECT * FROM api_keys WHERE key_hash = ? AND revoked_at IS NULL",
+            (key_hash,),
         ).fetchone()
 
 
@@ -109,8 +111,10 @@ def delete_api_key(key_id: int) -> bool:
 
 # ── Bookmark queries ────────────────────────────────────────────
 
+
 def upsert_bookmarks(
-    key_id: int, bookmarks: list[dict],
+    key_id: int,
+    bookmarks: list[dict],
 ) -> tuple[int, int, int]:
     """
     Sync bookmarks: upsert incoming list, soft-delete any that disappeared.
@@ -182,13 +186,12 @@ def get_device_stats(key_id: int) -> dict:
     """Return live sync statistics for the given key_id."""
     with get_db() as conn:
         bookmarks_count = conn.execute(
-            "SELECT COUNT(*) FROM bookmarks WHERE key_id = ? AND deleted = 0",
-            (key_id,)
+            "SELECT COUNT(*) FROM bookmarks WHERE key_id = ? AND deleted = 0", (key_id,)
         ).fetchone()[0]
 
         last_bookmark = conn.execute(
             "SELECT MAX(updated_at) FROM bookmarks WHERE key_id = ? AND deleted = 0",
-            (key_id,)
+            (key_id,),
         ).fetchone()[0]
 
         return {

@@ -128,9 +128,6 @@ async def get_bookmarks(
     return [dict(row) for row in db.get_bookmarks(key["id"])]
 
 
-
-
-
 # ── CLI ─────────────────────────────────────────────────────────
 
 
@@ -206,7 +203,12 @@ def _run_server() -> None:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] in ("create-key", "list-keys", "revoke-key", "serve"):
+    if len(sys.argv) > 1 and sys.argv[1] in (
+        "create-key",
+        "list-keys",
+        "revoke-key",
+        "serve",
+    ):
         cli()
     else:
         print(__doc__)

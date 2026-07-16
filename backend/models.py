@@ -5,10 +5,13 @@ from pydantic import BaseModel, Field
 
 # ── Request models ──────────────────────────────────────────────
 
+
 class BookmarkIn(BaseModel):
     url: str = Field(..., min_length=1, max_length=2048)
     title: str = Field("", max_length=512)
-    folder_path: str = Field("", max_length=1024, description="e.g. 'Bookmarks Bar/Recipes'")
+    folder_path: str = Field(
+        "", max_length=1024, description="e.g. 'Bookmarks Bar/Recipes'"
+    )
 
 
 class BookmarkSyncRequest(BaseModel):
@@ -16,6 +19,7 @@ class BookmarkSyncRequest(BaseModel):
 
 
 # ── Response models ─────────────────────────────────────────────
+
 
 class BookmarkOut(BaseModel):
     id: int
