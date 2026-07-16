@@ -21,6 +21,56 @@ A self-hosted Chrome extension + Python backend for syncing bookmarks across dev
 
 ### 1. Backend
 
+Choose one of the following options to run the backend:
+
+#### Option A: Docker Compose (Recommended)
+
+1. Make sure you have Docker and Docker Compose installed.
+2. Navigate to the `backend/` directory and configure the environment:
+   ```bash
+   cd backend
+   cp .env.example .env
+   # Edit .env as needed (e.g., configure CORS_ORIGINS)
+   ```
+   For details, inspect [docker-compose.yml](file:///home/pierre/Project/browser-sync-extension/backend/docker-compose.yml).
+3. Start the service in the background:
+   ```bash
+   docker compose up -d
+   ```
+4. Create an API key for your browser by running [main.py](file:///home/pierre/Project/browser-sync-extension/backend/main.py) inside the container:
+   ```bash
+   docker compose exec backend python main.py create-key "my-laptop"
+   # Save the displayed key — it's shown only once
+   ```
+
+#### Option B: Docker CLI (Alternative)
+
+1. Navigate to the `backend/` directory and configure the environment:
+   ```bash
+   cd backend
+   cp .env.example .env
+   ```
+2. Build the Docker image using [Dockerfile](file:///home/pierre/Project/browser-sync-extension/backend/Dockerfile):
+   ```bash
+   docker build -t browser-sync-backend .
+   ```
+3. Run the container with a persistent volume for the SQLite database:
+   ```bash
+   docker run -d \
+     --name browser-sync-backend \
+     -p 127.0.0.1:8000:8000 \
+     -v browser-sync-data:/data \
+     --env-file .env \
+     browser-sync-backend
+   ```
+4. Create an API key for your browser by running [main.py](file:///home/pierre/Project/browser-sync-extension/backend/main.py) inside the container:
+   ```bash
+   docker exec -it browser-sync-backend python main.py create-key "my-laptop"
+   # Save the displayed key — it's shown only once
+   ```
+
+#### Option C: Local Python Setup (No Docker)
+
 ```bash
 cd backend
 python -m venv .venv
@@ -51,6 +101,33 @@ python main.py serve
 
 ## API Key Management
 
+Depending on how you run the backend, use the corresponding commands to execute key management via [main.py](file:///home/pierre/Project/browser-sync-extension/backend/main.py).
+
+### With Docker Compose
+```bash
+# Create a new key
+docker compose exec backend python main.py create-key "work-pc"
+
+# List all keys
+docker compose exec backend python main.py list-keys
+
+# Revoke a key
+docker compose exec backend python main.py revoke-key <key-id>
+```
+
+### With Docker CLI
+```bash
+# Create a new key
+docker exec -it browser-sync-backend python main.py create-key "work-pc"
+
+# List all keys
+docker exec -it browser-sync-backend python main.py list-keys
+
+# Revoke a key
+docker exec -it browser-sync-backend python main.py revoke-key <key-id>
+```
+
+### With Local Python
 ```bash
 # Create a new key
 python main.py create-key "work-pc"
