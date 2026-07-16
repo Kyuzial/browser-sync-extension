@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+venv/
+.venv/
+*.db
+
+# Environment
+.env
+backend/.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Extension build artifacts
+extension/*.crx
+extension/*.pem
+extension/*.zip
+
+# SQLite journal sidecar files
+*.db-*
