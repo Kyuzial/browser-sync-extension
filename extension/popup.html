@@ -39,6 +39,17 @@
         <span class="stat-label">Bookmarks</span>
       </div>
     </div>
+    <div class="stat-card">
+      <svg class="stat-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+        <line x1="8" y1="21" x2="16" y2="21"/>
+        <line x1="12" y1="17" x2="12" y2="21"/>
+      </svg>
+      <div class="stat-info">
+        <span class="stat-value" id="tabCount">0</span>
+        <span class="stat-label">Local Tabs</span>
+      </div>
+    </div>
   </section>
 
   <!-- Actions -->
@@ -52,6 +63,35 @@
       </svg>
       <span>Sync Now</span>
     </button>
+  </section>
+
+  <!-- Synced Tabs Section -->
+  <section class="synced-tabs-section" id="syncedTabsSection">
+    <div class="section-header" id="otherTabsHeader" role="button" tabindex="0">
+      <div class="section-header-left">
+        <svg class="section-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+          <line x1="8" y1="21" x2="16" y2="21"/>
+          <line x1="12" y1="17" x2="12" y2="21"/>
+        </svg>
+        <span class="section-title">Tabs open on other browsers</span>
+      </div>
+      <div class="section-header-right">
+        <span class="badge" id="otherDevicesCount">0</span>
+        <svg class="chevron-icon" id="otherTabsChevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="section-body" id="otherTabsBody">
+      <div class="device-list" id="deviceList">
+        <!-- Dynamically rendered per-browser collapsible cards -->
+      </div>
+      <div class="empty-tabs-message" id="emptyTabsMessage" style="display: none;">
+        No tabs open on other browsers
+      </div>
+    </div>
   </section>
 
   <!-- Footer -->

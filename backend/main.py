@@ -31,7 +31,9 @@ from models import (
     BookmarkOut,
     BookmarkSyncRequest,
     BookmarkSyncResponse,
+    DeviceTabsOut,
     HealthResponse,
+    TabSyncRequest,
 )
 
 load_dotenv()
@@ -100,6 +102,8 @@ async def get_status(
     return {
         "bookmarkCount": stats["bookmark_count"],
         "lastBookmarkSync": parse_datetime_to_ms(stats["last_bookmark_sync"]),
+        "tabCount": stats["tab_count"],
+        "lastTabSync": parse_datetime_to_ms(stats["last_tab_sync"]),
     }
 
 
@@ -126,6 +130,32 @@ async def get_bookmarks(
 ) -> list[dict]:
     """Return all active bookmarks for the authenticated device."""
     return [dict(row) for row in db.get_bookmarks(key["id"])]
+
+
+@app.put("/api/tabs")
+@limiter.limit("60/minute")
+async def sync_tabs(
+    request: Request,
+    body: TabSyncRequest,
+    key: sqlite3.Row = Depends(get_current_key),
+) -> dict:
+    """Replace active open tabs for the authenticated device."""
+    db.replace_open_tabs(
+        key["id"],
+        [tab.model_dump() for tab in body.tabs],
+    )
+    return {"status": "ok", "count": len(body.tabs)}
+
+
+@app.get("/api/tabs/other", response_model=list[DeviceTabsOut])
+@limiter.limit("60/minute")
+async def get_other_tabs(
+    request: Request,
+    key: sqlite3.Row = Depends(get_current_key),
+) -> list[dict]:
+    """Return open tabs grouped by other active devices."""
+    return db.get_other_devices_tabs(key["id"])
+
 
 
 # ── CLI ─────────────────────────────────────────────────────────

@@ -27,6 +27,15 @@ CREATE TABLE IF NOT EXISTS bookmarks (
     deleted     INTEGER NOT NULL DEFAULT 0,
     UNIQUE(key_id, url, folder_path)
 );
+
+CREATE TABLE IF NOT EXISTS open_tabs (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    key_id       INTEGER NOT NULL REFERENCES api_keys(id),
+    url          TEXT    NOT NULL,
+    title        TEXT    NOT NULL DEFAULT '',
+    fav_icon_url TEXT    NOT NULL DEFAULT '',
+    updated_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 
@@ -194,7 +203,68 @@ def get_device_stats(key_id: int) -> dict:
             (key_id,),
         ).fetchone()[0]
 
+        tabs_count = conn.execute(
+            "SELECT COUNT(*) FROM open_tabs WHERE key_id = ?", (key_id,)
+        ).fetchone()[0]
+
+        last_tab = conn.execute(
+            "SELECT MAX(updated_at) FROM open_tabs WHERE key_id = ?",
+            (key_id,),
+        ).fetchone()[0]
+
         return {
             "bookmark_count": bookmarks_count,
             "last_bookmark_sync": last_bookmark,
+            "tab_count": tabs_count,
+            "last_tab_sync": last_tab,
         }
+
+
+# ── Open Tab queries ─────────────────────────────────────────────
+
+
+def replace_open_tabs(key_id: int, tabs: list[dict]) -> None:
+    """Replace all open tabs for a given device with the incoming list."""
+    with get_db() as conn:
+        conn.execute("DELETE FROM open_tabs WHERE key_id = ?", (key_id,))
+        for tab in tabs:
+            conn.execute(
+                "INSERT INTO open_tabs (key_id, url, title, fav_icon_url, updated_at) "
+                "VALUES (?, ?, ?, ?, datetime('now'))",
+                (key_id, tab["url"], tab["title"], tab.get("fav_icon_url", "") or ""),
+            )
+
+
+def get_other_devices_tabs(current_key_id: int) -> list[dict]:
+    """Return open tabs grouped by other active devices."""
+    with get_db() as conn:
+        rows = conn.execute(
+            """
+            SELECT k.id as device_id, k.device_name, t.id as tab_id, t.url, t.title, t.fav_icon_url, t.updated_at
+            FROM api_keys k
+            JOIN open_tabs t ON k.id = t.key_id
+            WHERE k.id != ? AND k.revoked_at IS NULL
+            ORDER BY k.device_name, t.id
+            """,
+            (current_key_id,),
+        ).fetchall()
+
+        devices_map: dict[int, dict] = {}
+        for r in rows:
+            did = r["device_id"]
+            if did not in devices_map:
+                devices_map[did] = {
+                    "device_id": did,
+                    "device_name": r["device_name"],
+                    "tabs": [],
+                }
+            devices_map[did]["tabs"].append({
+                "id": r["tab_id"],
+                "url": r["url"],
+                "title": r["title"],
+                "fav_icon_url": r["fav_icon_url"],
+                "updated_at": r["updated_at"],
+            })
+
+        return list(devices_map.values())
+

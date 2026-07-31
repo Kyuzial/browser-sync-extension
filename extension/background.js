@@ -16,6 +16,10 @@ const DEBOUNCE_DELAY = 5000; // ms — wait after last bookmark change
 
 let isSyncingBookmarks = false;
 let bookmarkDebounceTimer = null;
+let isSyncingTabs = false;
+let tabDebounceTimer = null;
+
+const DEBOUNCE_TAB_DELAY = 3000;
 
 // ---------------------------------------------------------------------------
 // Storage helpers
@@ -27,8 +31,11 @@ async function getSettings() {
     serverUrl: '',
     apiKey: '',
     autoSyncBookmarks: true,
+    autoSyncTabs: true,
     lastBookmarkSync: null,
+    lastTabSync: null,
     bookmarkCount: 0,
+    tabCount: 0,
     lastSyncedBookmarks: [],
   };
   const data = await chrome.storage.local.get(defaults);
@@ -343,6 +350,75 @@ function debouncedBookmarkSync() {
 }
 
 // ---------------------------------------------------------------------------
+// Open Tab sync
+// ---------------------------------------------------------------------------
+
+/** Sync open tabs with backend. Filters out incognito/private tabs. */
+async function syncTabs() {
+  if (isSyncingTabs) {
+    return { success: true, skipped: true };
+  }
+  isSyncingTabs = true;
+  console.log('[BrowserSync] Syncing open tabs…');
+
+  try {
+    const settings = await getSettings();
+    if (!settings.serverUrl || !settings.apiKey) {
+      console.log('[BrowserSync] Tab sync skipped: Server URL or API key not configured.');
+      return { success: false, error: 'Not configured' };
+    }
+
+    const allTabs = await chrome.tabs.query({});
+
+    // CRITICAL SECURITY & PRIVACY REQUIREMENT:
+    // Filter out incognito / private browser tabs completely!
+    const publicTabs = allTabs.filter(tab => !tab.incognito);
+
+    const tabsData = publicTabs
+      .filter(t => t.url && !t.url.startsWith('chrome://') && !t.url.startsWith('chrome-extension://') && !t.url.startsWith('about:'))
+      .map(t => ({
+        url: t.url,
+        title: t.title || '',
+        fav_icon_url: t.favIconUrl || '',
+      }));
+
+    await apiFetch('/api/tabs', {
+      method: 'PUT',
+      body: JSON.stringify({ tabs: tabsData }),
+    });
+
+    await saveSettings({
+      lastTabSync: Date.now(),
+      tabCount: tabsData.length,
+    });
+
+    console.log(`[BrowserSync] Tabs synced — ${tabsData.length} open tabs`);
+    return { success: true, count: tabsData.length };
+  } catch (err) {
+    console.error('[BrowserSync] Tab sync failed:', err);
+    return { success: false, error: err.message };
+  } finally {
+    isSyncingTabs = false;
+  }
+}
+
+/** Debounced tab sync — resets the timer on every call. */
+function debouncedTabSync() {
+  if (isSyncingTabs) return;
+  if (tabDebounceTimer) {
+    clearTimeout(tabDebounceTimer);
+  }
+
+  tabDebounceTimer = setTimeout(async () => {
+    tabDebounceTimer = null;
+    const settings = await getSettings();
+    if (settings.autoSyncTabs !== false) {
+      await syncTabs();
+    }
+  }, DEBOUNCE_TAB_DELAY);
+}
+
+// ---------------------------------------------------------------------------
 // Event listeners
 // ---------------------------------------------------------------------------
 
@@ -352,6 +428,18 @@ chrome.bookmarks.onRemoved.addListener(debouncedBookmarkSync);
 chrome.bookmarks.onChanged.addListener(debouncedBookmarkSync);
 chrome.bookmarks.onMoved.addListener(debouncedBookmarkSync);
 
+// -- Tab events (debounced) --
+chrome.tabs.onCreated.addListener(debouncedTabSync);
+chrome.tabs.onRemoved.addListener(debouncedTabSync);
+chrome.tabs.onUpdated.addListener((_tabId, changeInfo) => {
+  if (changeInfo.status === 'complete' || changeInfo.url || changeInfo.title) {
+    debouncedTabSync();
+  }
+});
+chrome.tabs.onMoved.addListener(debouncedTabSync);
+chrome.tabs.onReplaced.addListener(debouncedTabSync);
+chrome.tabs.onActivated.addListener(debouncedTabSync);
+
 // -- Message handler (popup & options communicate via messages) --
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   // We must return true to indicate we will respond asynchronously.
@@ -359,13 +447,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     try {
       switch (message.action) {
         case 'syncAll': {
-          const result = await syncBookmarks();
-          sendResponse({ bookmarks: result });
+          const bookmarkResult = await syncBookmarks();
+          const tabResult = await syncTabs();
+          sendResponse({ bookmarks: bookmarkResult, tabs: tabResult });
           break;
         }
 
         case 'forceSync': {
           const result = await syncBookmarks(true);
+          await syncTabs();
           sendResponse(result);
           break;
         }
@@ -373,6 +463,22 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         case 'syncBookmarks': {
           const result = await syncBookmarks();
           sendResponse(result);
+          break;
+        }
+
+        case 'syncTabs': {
+          const result = await syncTabs();
+          sendResponse(result);
+          break;
+        }
+
+        case 'getOtherTabs': {
+          try {
+            const otherTabs = await apiFetch('/api/tabs/other', { method: 'GET' });
+            sendResponse({ success: true, devices: otherTabs || [] });
+          } catch (e) {
+            sendResponse({ success: false, error: e.message });
+          }
           break;
         }
 
@@ -395,6 +501,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             sendResponse({
               lastBookmarkSync: settings.lastBookmarkSync,
               bookmarkCount: settings.bookmarkCount,
+              lastTabSync: settings.lastTabSync,
+              tabCount: settings.tabCount,
             });
           }
           break;
@@ -420,10 +528,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 chrome.runtime.onInstalled.addListener(() => {
   console.log('[BrowserSync] Extension installed / updated');
   syncBookmarks();
+  syncTabs();
 });
 
 // -- Service worker startup --
 chrome.runtime.onStartup.addListener(() => {
   console.log('[BrowserSync] Service worker started');
   syncBookmarks();
+  syncTabs();
 });

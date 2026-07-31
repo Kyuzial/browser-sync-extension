@@ -15,6 +15,7 @@ const toggleKeyBtn       = $('#toggleKeyVisibility');
 const testConnectionBtn  = $('#testConnectionBtn');
 const connectionResult   = $('#connectionResult');
 const autoSyncBookmarks  = $('#autoSyncBookmarks');
+const autoSyncTabs       = $('#autoSyncTabs');
 const forceSyncBtn       = $('#forceSyncBtn');
 const saveBtn            = $('#saveBtn');
 const toast              = $('#toast');
@@ -41,11 +42,15 @@ async function loadSettings() {
     serverUrl: '',
     apiKey: '',
     autoSyncBookmarks: true,
+    autoSyncTabs: true,
   });
 
   serverUrlInput.value            = data.serverUrl;
   apiKeyInput.value               = data.apiKey;
   autoSyncBookmarks.checked       = data.autoSyncBookmarks;
+  if (autoSyncTabs) {
+    autoSyncTabs.checked          = data.autoSyncTabs !== false;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -60,6 +65,7 @@ saveBtn.addEventListener('click', async () => {
     serverUrl:         url,
     apiKey:            key,
     autoSyncBookmarks: autoSyncBookmarks.checked,
+    autoSyncTabs:      autoSyncTabs ? autoSyncTabs.checked : true,
   };
 
   if (!url) {

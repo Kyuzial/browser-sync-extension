@@ -18,6 +18,16 @@ class BookmarkSyncRequest(BaseModel):
     bookmarks: list[BookmarkIn] = Field(..., max_length=10_000)
 
 
+class TabIn(BaseModel):
+    url: str = Field(..., min_length=1, max_length=65_536)
+    title: str = Field("", max_length=512)
+    fav_icon_url: str = Field("", max_length=65_536)
+
+
+class TabSyncRequest(BaseModel):
+    tabs: list[TabIn] = Field(..., max_length=1_000)
+
+
 # ── Response models ─────────────────────────────────────────────
 
 
@@ -37,5 +47,20 @@ class BookmarkSyncResponse(BaseModel):
     deleted: int
 
 
+class TabOut(BaseModel):
+    id: int
+    url: str
+    title: str
+    fav_icon_url: str
+    updated_at: str
+
+
+class DeviceTabsOut(BaseModel):
+    device_id: int
+    device_name: str
+    tabs: list[TabOut]
+
+
 class HealthResponse(BaseModel):
     status: str = "ok"
+

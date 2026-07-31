@@ -147,6 +147,8 @@ python main.py revoke-key <key-id>
 | `GET` | `/api/status` | Live sync stats |
 | `PUT` | `/api/bookmarks` | Sync bookmarks (3-way merge) |
 | `GET` | `/api/bookmarks` | Get all bookmarks |
+| `PUT` | `/api/tabs` | Update active open tabs for device |
+| `GET` | `/api/tabs/other` | Get open tabs from other browsers/devices |
 
 All data endpoints require `Authorization: Bearer <api-key>` header.
 
