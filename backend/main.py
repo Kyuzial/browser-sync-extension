@@ -142,15 +142,12 @@ async def sync_tabs(
     request: Request,
     body: TabSyncRequest,
     key: sqlite3.Row = Depends(get_current_key),
-    x_device_id: str | None = Header(None),
     x_device_name: str | None = Header(None),
 ) -> dict:
     """Replace active open tabs for the authenticated device."""
-    device_id = (x_device_id and x_device_id.strip()) or ""
     device_name = (x_device_name and x_device_name.strip()) or key["device_name"]
     db.replace_open_tabs(
         key["id"],
-        device_id,
         device_name,
         [tab.model_dump() for tab in body.tabs],
     )
@@ -162,13 +159,11 @@ async def sync_tabs(
 async def get_other_tabs(
     request: Request,
     key: sqlite3.Row = Depends(get_current_key),
-    x_device_id: str | None = Header(None),
     x_device_name: str | None = Header(None),
 ) -> list[dict]:
     """Return open tabs grouped by other active devices."""
-    device_id = (x_device_id and x_device_id.strip()) or ""
     device_name = (x_device_name and x_device_name.strip()) or key["device_name"]
-    return db.get_other_devices_tabs(key["id"], device_id, device_name)
+    return db.get_other_devices_tabs(key["id"], device_name)
 
 
 # ── CLI ─────────────────────────────────────────────────────────

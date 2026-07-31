@@ -84,7 +84,6 @@ async function saveSettings(partial) {
  */
 async function apiFetch(path, options = {}, retries = MAX_RETRIES) {
   const { serverUrl, apiKey, deviceName } = await getSettings();
-  const deviceId = await getDeviceId();
 
   if (!serverUrl || !apiKey || !deviceName) {
     throw new Error('Server URL, API key, or Device Name not configured');
@@ -94,7 +93,6 @@ async function apiFetch(path, options = {}, retries = MAX_RETRIES) {
   const headers = {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${apiKey}`,
-    'X-Device-Id': deviceId,
     'X-Device-Name': deviceName.trim(),
     ...(options.headers || {}),
   };

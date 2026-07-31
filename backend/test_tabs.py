@@ -26,7 +26,6 @@ def test_db_replace_and_get_other_tabs():
     # Insert open tabs for device 1
     db.replace_open_tabs(
         id1,
-        "dev_ff",
         "Device 1 - Firefox",
         [
             {
@@ -41,7 +40,6 @@ def test_db_replace_and_get_other_tabs():
     # Insert open tabs for device 2
     db.replace_open_tabs(
         id2,
-        "dev_ch",
         "Device 2 - Chrome",
         [
             {
@@ -53,14 +51,14 @@ def test_db_replace_and_get_other_tabs():
     )
 
     # Device 1 queries other devices' tabs
-    other_tabs_for_1 = db.get_other_devices_tabs(id1, "dev_ff", "Device 1 - Firefox")
+    other_tabs_for_1 = db.get_other_devices_tabs(id1, "Device 1 - Firefox")
     assert len(other_tabs_for_1) == 1
     assert other_tabs_for_1[0]["device_name"] == "Device 2 - Chrome"
     assert len(other_tabs_for_1[0]["tabs"]) == 1
     assert other_tabs_for_1[0]["tabs"][0]["url"] == "https://github.com"
 
     # Device 2 queries other devices' tabs
-    other_tabs_for_2 = db.get_other_devices_tabs(id2, "dev_ch", "Device 2 - Chrome")
+    other_tabs_for_2 = db.get_other_devices_tabs(id2, "Device 2 - Chrome")
     assert len(other_tabs_for_2) == 1
     assert other_tabs_for_2[0]["device_name"] == "Device 1 - Firefox"
     assert len(other_tabs_for_2[0]["tabs"]) == 2

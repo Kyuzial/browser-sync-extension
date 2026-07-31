@@ -242,31 +242,23 @@ def get_device_stats(key_id: int) -> dict:
 
 def replace_open_tabs(
     key_id: int,
-    device_id: str,
     device_name: str,
     tabs: list[dict],
 ) -> None:
-    """Replace open tabs for a given device_id (or device_name if device_id empty) under key_id."""
+    """Replace all open tabs for a given device_name under key_id."""
+    clean_name = device_name.strip()
     with get_db() as conn:
-        if device_id:
-            conn.execute(
-                "DELETE FROM open_tabs WHERE key_id = ? AND device_id = ?",
-                (key_id, device_id),
-            )
-        else:
-            conn.execute(
-                "DELETE FROM open_tabs WHERE key_id = ? AND device_name = ?",
-                (key_id, device_name),
-            )
-
+        conn.execute(
+            "DELETE FROM open_tabs WHERE key_id = ? AND LOWER(device_name) = LOWER(?)",
+            (key_id, clean_name),
+        )
         for tab in tabs:
             conn.execute(
-                "INSERT INTO open_tabs (key_id, device_id, device_name, url, title, fav_icon_url, updated_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
+                "INSERT INTO open_tabs (key_id, device_name, url, title, fav_icon_url, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, datetime('now'))",
                 (
                     key_id,
-                    device_id,
-                    device_name,
+                    clean_name,
                     tab["url"],
                     tab["title"],
                     tab.get("fav_icon_url", "") or "",
@@ -276,49 +268,39 @@ def replace_open_tabs(
 
 def get_other_devices_tabs(
     current_key_id: int,
-    current_device_id: str,
     current_device_name: str,
 ) -> list[dict]:
     """Return open tabs grouped by other active devices."""
+    clean_name = current_device_name.strip()
     with get_db() as conn:
-        if current_device_id:
-            rows = conn.execute(
-                """
-                SELECT t.id as tab_id, t.device_id, t.device_name, t.url, t.title, t.fav_icon_url, t.updated_at
-                FROM open_tabs t
-                JOIN api_keys k ON t.key_id = k.id
-                WHERE k.revoked_at IS NULL
-                  AND datetime(t.updated_at) >= datetime('now', '-7 days')
-                  AND NOT (t.key_id = ? AND t.device_id = ?)
-                ORDER BY t.device_name, t.id
-                """,
-                (current_key_id, current_device_id),
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                """
-                SELECT t.id as tab_id, t.device_id, t.device_name, t.url, t.title, t.fav_icon_url, t.updated_at
-                FROM open_tabs t
-                JOIN api_keys k ON t.key_id = k.id
-                WHERE k.revoked_at IS NULL
-                  AND datetime(t.updated_at) >= datetime('now', '-7 days')
-                  AND NOT (t.key_id = ? AND t.device_name = ?)
-                ORDER BY t.device_name, t.id
-                """,
-                (current_key_id, current_device_name),
-            ).fetchall()
+        # Purge stale tabs older than 24 hours
+        conn.execute(
+            "DELETE FROM open_tabs WHERE datetime(updated_at) < datetime('now', '-24 hours')"
+        )
+
+        rows = conn.execute(
+            """
+            SELECT t.id as tab_id, t.device_name, t.url, t.title, t.fav_icon_url, t.updated_at
+            FROM open_tabs t
+            JOIN api_keys k ON t.key_id = k.id
+            WHERE k.revoked_at IS NULL
+              AND LOWER(t.device_name) != LOWER(?)
+            ORDER BY t.device_name, t.id
+            """,
+            (clean_name,),
+        ).fetchall()
 
         devices_map: dict[str, dict] = {}
         for r in rows:
-            group_key = r["device_id"] or r["device_name"]
-            dname = r["device_name"] or group_key
-            if group_key not in devices_map:
-                devices_map[group_key] = {
-                    "device_id": group_key,
+            dname = r["device_name"]
+            key_name = dname.lower()
+            if key_name not in devices_map:
+                devices_map[key_name] = {
+                    "device_id": key_name,
                     "device_name": dname,
                     "tabs": [],
                 }
-            devices_map[group_key]["tabs"].append(
+            devices_map[key_name]["tabs"].append(
                 {
                     "id": r["tab_id"],
                     "url": r["url"],
