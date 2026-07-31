@@ -1,14 +1,14 @@
 {
   "manifest_version": 3,
   "name": "Browser Sync",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Sync bookmarks to your self-hosted server",
   "permissions": [
     "bookmarks",
     "storage",
     "tabs"
   ],
-  "optional_host_permissions": [
+  "host_permissions": [
     "http://*/*",
     "https://*/*"
   ],

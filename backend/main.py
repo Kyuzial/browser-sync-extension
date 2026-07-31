@@ -18,7 +18,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Header
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -52,9 +52,12 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     yield
 
 
+APP_VERSION = "1.1.0"
+
+
 def create_app() -> FastAPI:
     """Application factory."""
-    app = FastAPI(title="Browser Sync", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="Browser Sync", version=APP_VERSION, lifespan=lifespan)
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -78,7 +81,7 @@ app = create_app()
 
 @app.get("/api/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
-    return HealthResponse()
+    return HealthResponse(status="ok", version=APP_VERSION)
 
 
 def parse_datetime_to_ms(dt_str: str | None) -> int | None:
@@ -100,6 +103,7 @@ async def get_status(
     """Return live sync statistics for the authenticated device."""
     stats = db.get_device_stats(key["id"])
     return {
+        "version": APP_VERSION,
         "bookmarkCount": stats["bookmark_count"],
         "lastBookmarkSync": parse_datetime_to_ms(stats["last_bookmark_sync"]),
         "tabCount": stats["tab_count"],
@@ -138,10 +142,13 @@ async def sync_tabs(
     request: Request,
     body: TabSyncRequest,
     key: sqlite3.Row = Depends(get_current_key),
+    x_device_name: str | None = Header(None),
 ) -> dict:
     """Replace active open tabs for the authenticated device."""
+    device_name = (x_device_name and x_device_name.strip()) or key["device_name"]
     db.replace_open_tabs(
         key["id"],
+        device_name,
         [tab.model_dump() for tab in body.tabs],
     )
     return {"status": "ok", "count": len(body.tabs)}
@@ -152,10 +159,11 @@ async def sync_tabs(
 async def get_other_tabs(
     request: Request,
     key: sqlite3.Row = Depends(get_current_key),
+    x_device_name: str | None = Header(None),
 ) -> list[dict]:
     """Return open tabs grouped by other active devices."""
-    return db.get_other_devices_tabs(key["id"])
-
+    device_name = (x_device_name and x_device_name.strip()) or key["device_name"]
+    return db.get_other_devices_tabs(key["id"], device_name)
 
 
 # ── CLI ─────────────────────────────────────────────────────────

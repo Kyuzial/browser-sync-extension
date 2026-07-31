@@ -26,8 +26,13 @@ def test_db_replace_and_get_other_tabs():
     # Insert open tabs for device 1
     db.replace_open_tabs(
         id1,
+        "Device 1 - Firefox",
         [
-            {"url": "https://example.com/1", "title": "Example 1", "fav_icon_url": "https://example.com/favicon.ico"},
+            {
+                "url": "https://example.com/1",
+                "title": "Example 1",
+                "fav_icon_url": "https://example.com/favicon.ico",
+            },
             {"url": "https://example.com/2", "title": "Example 2", "fav_icon_url": ""},
         ],
     )
@@ -35,55 +40,75 @@ def test_db_replace_and_get_other_tabs():
     # Insert open tabs for device 2
     db.replace_open_tabs(
         id2,
+        "Device 2 - Chrome",
         [
-            {"url": "https://github.com", "title": "GitHub", "fav_icon_url": "https://github.com/favicon.ico"},
+            {
+                "url": "https://github.com",
+                "title": "GitHub",
+                "fav_icon_url": "https://github.com/favicon.ico",
+            },
         ],
     )
 
     # Device 1 queries other devices' tabs
-    other_tabs_for_1 = db.get_other_devices_tabs(id1)
+    other_tabs_for_1 = db.get_other_devices_tabs(id1, "Device 1 - Firefox")
     assert len(other_tabs_for_1) == 1
     assert other_tabs_for_1[0]["device_name"] == "Device 2 - Chrome"
     assert len(other_tabs_for_1[0]["tabs"]) == 1
     assert other_tabs_for_1[0]["tabs"][0]["url"] == "https://github.com"
 
     # Device 2 queries other devices' tabs
-    other_tabs_for_2 = db.get_other_devices_tabs(id2)
+    other_tabs_for_2 = db.get_other_devices_tabs(id2, "Device 2 - Chrome")
     assert len(other_tabs_for_2) == 1
     assert other_tabs_for_2[0]["device_name"] == "Device 1 - Firefox"
     assert len(other_tabs_for_2[0]["tabs"]) == 2
 
 
-def test_api_tabs_endpoints():
+def test_api_tabs_endpoints_with_shared_key():
     client = TestClient(app)
 
-    raw_key1 = generate_key()
-    raw_key2 = generate_key()
+    raw_key = generate_key()
+    db.insert_api_key("Shared Key Device", hash_key(raw_key))
 
-    db.insert_api_key("Laptop", hash_key(raw_key1))
-    db.insert_api_key("Desktop", hash_key(raw_key2))
+    # Two browsers using the SAME API key but specifying different device names
+    headers_firefox = {
+        "Authorization": f"Bearer {raw_key}",
+        "X-Device-Name": "Firefox on Linux",
+    }
+    headers_chrome = {
+        "Authorization": f"Bearer {raw_key}",
+        "X-Device-Name": "Chrome on Linux",
+    }
 
-    headers1 = {"Authorization": f"Bearer {raw_key1}"}
-    headers2 = {"Authorization": f"Bearer {raw_key2}"}
-
-    # Upload tabs from Laptop
-    payload = {
+    # Upload tabs from Firefox (2 tabs)
+    payload_firefox = {
         "tabs": [
             {"url": "https://python.org", "title": "Python", "fav_icon_url": ""},
-            {"url": "https://fastapi.tiangolo.com", "title": "FastAPI", "fav_icon_url": ""},
+            {
+                "url": "https://fastapi.tiangolo.com",
+                "title": "FastAPI",
+                "fav_icon_url": "",
+            },
         ]
     }
-    res = client.put("/api/tabs", json=payload, headers=headers1)
-    assert res.status_code == 200
-    assert res.json() == {"status": "ok", "count": 2}
+    res1 = client.put("/api/tabs", json=payload_firefox, headers=headers_firefox)
+    assert res1.status_code == 200
 
-    # Fetch other tabs from Desktop
-    res_other = client.get("/api/tabs/other", headers=headers2)
+    # Upload tabs from Chrome (0 tabs)
+    payload_chrome = {"tabs": []}
+    res2 = client.put("/api/tabs", json=payload_chrome, headers=headers_chrome)
+    assert res2.status_code == 200
+
+    # Chrome queries other tabs -> should see Firefox's 2 tabs!
+    res_other = client.get("/api/tabs/other", headers=headers_chrome)
     assert res_other.status_code == 200
     data = res_other.json()
     assert len(data) == 1
-    assert data[0]["device_name"] == "Laptop"
+    assert data[0]["device_name"] == "Firefox on Linux"
     assert len(data[0]["tabs"]) == 2
-    titles = [t["title"] for t in data[0]["tabs"]]
-    assert "Python" in titles
-    assert "FastAPI" in titles
+
+    # Firefox queries other tabs -> Chrome has 0 tabs, so 0 devices with tabs returned
+    res_other_ff = client.get("/api/tabs/other", headers=headers_firefox)
+    assert res_other_ff.status_code == 200
+    data_ff = res_other_ff.json()
+    assert len(data_ff) == 0

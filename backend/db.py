@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS bookmarks (
 CREATE TABLE IF NOT EXISTS open_tabs (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     key_id       INTEGER NOT NULL REFERENCES api_keys(id),
+    device_name  TEXT    NOT NULL DEFAULT '',
     url          TEXT    NOT NULL,
     title        TEXT    NOT NULL DEFAULT '',
     fav_icon_url TEXT    NOT NULL DEFAULT '',
@@ -46,6 +47,14 @@ def init_db() -> None:
         columns = {row["name"] for row in conn.execute("PRAGMA table_info(api_keys)")}
         if "revoked_at" not in columns:
             conn.execute("ALTER TABLE api_keys ADD COLUMN revoked_at TEXT")
+
+        tab_columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(open_tabs)")
+        }
+        if "device_name" not in tab_columns:
+            conn.execute(
+                "ALTER TABLE open_tabs ADD COLUMN device_name TEXT NOT NULL DEFAULT ''"
+            )
 
 
 def _restrict_db_permissions() -> None:
@@ -223,48 +232,59 @@ def get_device_stats(key_id: int) -> dict:
 # ── Open Tab queries ─────────────────────────────────────────────
 
 
-def replace_open_tabs(key_id: int, tabs: list[dict]) -> None:
-    """Replace all open tabs for a given device with the incoming list."""
+def replace_open_tabs(key_id: int, device_name: str, tabs: list[dict]) -> None:
+    """Replace open tabs for a given device name under this key."""
     with get_db() as conn:
-        conn.execute("DELETE FROM open_tabs WHERE key_id = ?", (key_id,))
+        conn.execute(
+            "DELETE FROM open_tabs WHERE key_id = ? AND device_name = ?",
+            (key_id, device_name),
+        )
         for tab in tabs:
             conn.execute(
-                "INSERT INTO open_tabs (key_id, url, title, fav_icon_url, updated_at) "
-                "VALUES (?, ?, ?, ?, datetime('now'))",
-                (key_id, tab["url"], tab["title"], tab.get("fav_icon_url", "") or ""),
+                "INSERT INTO open_tabs (key_id, device_name, url, title, fav_icon_url, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, datetime('now'))",
+                (
+                    key_id,
+                    device_name,
+                    tab["url"],
+                    tab["title"],
+                    tab.get("fav_icon_url", "") or "",
+                ),
             )
 
 
-def get_other_devices_tabs(current_key_id: int) -> list[dict]:
+def get_other_devices_tabs(current_key_id: int, current_device_name: str) -> list[dict]:
     """Return open tabs grouped by other active devices."""
     with get_db() as conn:
         rows = conn.execute(
             """
-            SELECT k.id as device_id, k.device_name, t.id as tab_id, t.url, t.title, t.fav_icon_url, t.updated_at
-            FROM api_keys k
-            JOIN open_tabs t ON k.id = t.key_id
-            WHERE k.id != ? AND k.revoked_at IS NULL
-            ORDER BY k.device_name, t.id
+            SELECT t.id as tab_id, t.device_name, t.url, t.title, t.fav_icon_url, t.updated_at
+            FROM open_tabs t
+            JOIN api_keys k ON t.key_id = k.id
+            WHERE k.revoked_at IS NULL
+              AND NOT (t.key_id = ? AND t.device_name = ?)
+            ORDER BY t.device_name, t.id
             """,
-            (current_key_id,),
+            (current_key_id, current_device_name),
         ).fetchall()
 
-        devices_map: dict[int, dict] = {}
+        devices_map: dict[str, dict] = {}
         for r in rows:
-            did = r["device_id"]
-            if did not in devices_map:
-                devices_map[did] = {
-                    "device_id": did,
-                    "device_name": r["device_name"],
+            dname = r["device_name"]
+            if dname not in devices_map:
+                devices_map[dname] = {
+                    "device_id": dname,
+                    "device_name": dname,
                     "tabs": [],
                 }
-            devices_map[did]["tabs"].append({
-                "id": r["tab_id"],
-                "url": r["url"],
-                "title": r["title"],
-                "fav_icon_url": r["fav_icon_url"],
-                "updated_at": r["updated_at"],
-            })
+            devices_map[dname]["tabs"].append(
+                {
+                    "id": r["tab_id"],
+                    "url": r["url"],
+                    "title": r["title"],
+                    "fav_icon_url": r["fav_icon_url"],
+                    "updated_at": r["updated_at"],
+                }
+            )
 
         return list(devices_map.values())
-

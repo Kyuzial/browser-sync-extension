@@ -21,6 +21,24 @@ let tabDebounceTimer = null;
 
 const DEBOUNCE_TAB_DELAY = 3000;
 
+function getAutoDeviceName() {
+  const ua = navigator.userAgent;
+  let browser = 'Browser';
+  if (ua.includes('Firefox/')) browser = 'Firefox';
+  else if (ua.includes('Edg/')) browser = 'Edge';
+  else if (ua.includes('Chrome/')) browser = 'Chrome';
+  else if (ua.includes('Safari/')) browser = 'Safari';
+
+  let os = 'Device';
+  if (ua.includes('Linux')) os = 'Linux';
+  else if (ua.includes('Macintosh')) os = 'Mac';
+  else if (ua.includes('Windows')) os = 'Windows';
+  else if (ua.includes('Android')) os = 'Android';
+  else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS';
+
+  return `${browser} on ${os}`;
+}
+
 // ---------------------------------------------------------------------------
 // Storage helpers
 // ---------------------------------------------------------------------------
@@ -30,6 +48,7 @@ async function getSettings() {
   const defaults = {
     serverUrl: '',
     apiKey: '',
+    deviceName: '',
     autoSyncBookmarks: true,
     autoSyncTabs: true,
     lastBookmarkSync: null,
@@ -56,7 +75,7 @@ async function saveSettings(partial) {
  * Retries up to MAX_RETRIES times with exponential back-off on failure.
  */
 async function apiFetch(path, options = {}, retries = MAX_RETRIES) {
-  const { serverUrl, apiKey } = await getSettings();
+  const { serverUrl, apiKey, deviceName } = await getSettings();
 
   if (!serverUrl || !apiKey) {
     throw new Error('Server URL or API key not configured');
@@ -66,6 +85,7 @@ async function apiFetch(path, options = {}, retries = MAX_RETRIES) {
   const headers = {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${apiKey}`,
+    'X-Device-Name': (deviceName && deviceName.trim()) || getAutoDeviceName(),
     ...(options.headers || {}),
   };
 
@@ -488,7 +508,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const res = await fetch(url, {
             headers: { 'Authorization': `Bearer ${apiKey}` },
           });
-          sendResponse({ ok: res.ok, status: res.status });
+          const data = res.ok ? await res.json().catch(() => null) : null;
+          sendResponse({ ok: res.ok, status: res.status, version: data?.version || null });
           break;
         }
 

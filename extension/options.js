@@ -11,6 +11,7 @@ const $ = (sel) => document.querySelector(sel);
 
 const serverUrlInput     = $('#serverUrl');
 const apiKeyInput        = $('#apiKey');
+const deviceNameInput    = $('#deviceName');
 const toggleKeyBtn       = $('#toggleKeyVisibility');
 const testConnectionBtn  = $('#testConnectionBtn');
 const connectionResult   = $('#connectionResult');
@@ -41,12 +42,16 @@ async function loadSettings() {
   const data = await chrome.storage.local.get({
     serverUrl: '',
     apiKey: '',
+    deviceName: '',
     autoSyncBookmarks: true,
     autoSyncTabs: true,
   });
 
   serverUrlInput.value            = data.serverUrl;
   apiKeyInput.value               = data.apiKey;
+  if (deviceNameInput) {
+    deviceNameInput.value         = data.deviceName || '';
+  }
   autoSyncBookmarks.checked       = data.autoSyncBookmarks;
   if (autoSyncTabs) {
     autoSyncTabs.checked          = data.autoSyncTabs !== false;
@@ -60,10 +65,12 @@ async function loadSettings() {
 saveBtn.addEventListener('click', async () => {
   const url = serverUrlInput.value.trim().replace(/\/+$/, '');
   const key = apiKeyInput.value.trim();
+  const deviceName = deviceNameInput ? deviceNameInput.value.trim() : '';
 
   const settings = {
     serverUrl:         url,
     apiKey:            key,
+    deviceName:        deviceName,
     autoSyncBookmarks: autoSyncBookmarks.checked,
     autoSyncTabs:      autoSyncTabs ? autoSyncTabs.checked : true,
   };
@@ -79,20 +86,24 @@ saveBtn.addEventListener('click', async () => {
     return;
   }
 
-  const origin = url + '/*';
-  chrome.permissions.request({
-    origins: [origin]
-  }, async (granted) => {
-    if (granted) {
-      await chrome.storage.local.set(settings);
-      showToast('✓ Settings saved');
-      try {
-        await chrome.runtime.sendMessage({ action: 'syncAll' });
-      } catch (e) {}
-    } else {
-      showToast('✗ Permission required to sync with this server');
-    }
-  });
+  const saveAndSync = async () => {
+    await chrome.storage.local.set(settings);
+    showToast('✓ Settings saved');
+    try {
+      await chrome.runtime.sendMessage({ action: 'syncAll' });
+    } catch (e) {}
+  };
+
+  try {
+    const origin = url + '/*';
+    chrome.permissions.request({
+      origins: [origin]
+    }, async (granted) => {
+      await saveAndSync();
+    });
+  } catch (e) {
+    await saveAndSync();
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -147,7 +158,8 @@ testConnectionBtn.addEventListener('click', async () => {
       });
 
       if (response?.ok) {
-        setResult('✓ Connected successfully', true);
+        const verStr = response.version ? ` (Server v${response.version})` : '';
+        setResult(`✓ Connected successfully${verStr}`, true);
       } else {
         setResult(`✗ Server returned ${response?.status || 'an error'}`, false);
       }

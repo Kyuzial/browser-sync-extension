@@ -56,11 +56,11 @@ class TabOut(BaseModel):
 
 
 class DeviceTabsOut(BaseModel):
-    device_id: int
+    device_id: str
     device_name: str
     tabs: list[TabOut]
 
 
 class HealthResponse(BaseModel):
     status: str = "ok"
-
+    version: str = "1.1.0"
