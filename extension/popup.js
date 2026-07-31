@@ -65,8 +65,8 @@ function formatRelativeTime(timestamp) {
 /** Check server connectivity via the background script. */
 async function checkConnection() {
   try {
-    const settings = await chrome.storage.local.get(['serverUrl', 'apiKey']);
-    if (!settings.serverUrl || !settings.apiKey) {
+    const settings = await chrome.storage.local.get(['serverUrl', 'apiKey', 'deviceName']);
+    if (!settings.serverUrl || !settings.apiKey || !settings.deviceName) {
       setConnectionStatus(false, 'Not configured');
       return;
     }

@@ -86,6 +86,11 @@ saveBtn.addEventListener('click', async () => {
     return;
   }
 
+  if (!deviceName) {
+    showToast('✗ Device Name is required');
+    return;
+  }
+
   const saveAndSync = async () => {
     await chrome.storage.local.set(settings);
     showToast('✓ Settings saved');

@@ -1,6 +1,6 @@
 /* ==========================================================================
    Background Service Worker — Browser Sync Extension
-   Handles bookmark & history sync with debouncing, alarms, and retry logic.
+   Handles bookmark & open tab sync with debouncing, alarms, and retry logic.
    ========================================================================== */
 
 // ---------------------------------------------------------------------------
@@ -20,6 +20,14 @@ let isSyncingTabs = false;
 let tabDebounceTimer = null;
 
 const DEBOUNCE_TAB_DELAY = 3000;
+
+async function getDeviceId() {
+  const data = await chrome.storage.local.get('deviceId');
+  if (data.deviceId) return data.deviceId;
+  const newId = 'dev_' + Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
+  await chrome.storage.local.set({ deviceId: newId });
+  return newId;
+}
 
 function getAutoDeviceName() {
   const ua = navigator.userAgent;
@@ -76,16 +84,18 @@ async function saveSettings(partial) {
  */
 async function apiFetch(path, options = {}, retries = MAX_RETRIES) {
   const { serverUrl, apiKey, deviceName } = await getSettings();
+  const deviceId = await getDeviceId();
 
-  if (!serverUrl || !apiKey) {
-    throw new Error('Server URL or API key not configured');
+  if (!serverUrl || !apiKey || !deviceName) {
+    throw new Error('Server URL, API key, or Device Name not configured');
   }
 
   const url = `${serverUrl.replace(/\/+$/, '')}${path}`;
   const headers = {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${apiKey}`,
-    'X-Device-Name': (deviceName && deviceName.trim()) || getAutoDeviceName(),
+    'X-Device-Id': deviceId,
+    'X-Device-Name': deviceName.trim(),
     ...(options.headers || {}),
   };
 
@@ -383,8 +393,8 @@ async function syncTabs() {
 
   try {
     const settings = await getSettings();
-    if (!settings.serverUrl || !settings.apiKey) {
-      console.log('[BrowserSync] Tab sync skipped: Server URL or API key not configured.');
+    if (!settings.serverUrl || !settings.apiKey || !settings.deviceName) {
+      console.log('[BrowserSync] Tab sync skipped: Server URL, API key, or Device Name not configured.');
       return { success: false, error: 'Not configured' };
     }
 

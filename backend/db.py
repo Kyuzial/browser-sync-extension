@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS bookmarks (
 CREATE TABLE IF NOT EXISTS open_tabs (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     key_id       INTEGER NOT NULL REFERENCES api_keys(id),
+    device_id    TEXT    NOT NULL DEFAULT '',
     device_name  TEXT    NOT NULL DEFAULT '',
     url          TEXT    NOT NULL,
     title        TEXT    NOT NULL DEFAULT '',
@@ -55,6 +56,13 @@ def init_db() -> None:
             conn.execute(
                 "ALTER TABLE open_tabs ADD COLUMN device_name TEXT NOT NULL DEFAULT ''"
             )
+        if "device_id" not in tab_columns:
+            conn.execute(
+                "ALTER TABLE open_tabs ADD COLUMN device_id TEXT NOT NULL DEFAULT ''"
+            )
+
+        # Automatically purge legacy tab entries without a unique device_id attached
+        conn.execute("DELETE FROM open_tabs WHERE device_id = ''")
 
 
 def _restrict_db_permissions() -> None:
@@ -232,19 +240,32 @@ def get_device_stats(key_id: int) -> dict:
 # ── Open Tab queries ─────────────────────────────────────────────
 
 
-def replace_open_tabs(key_id: int, device_name: str, tabs: list[dict]) -> None:
-    """Replace open tabs for a given device name under this key."""
+def replace_open_tabs(
+    key_id: int,
+    device_id: str,
+    device_name: str,
+    tabs: list[dict],
+) -> None:
+    """Replace open tabs for a given device_id (or device_name if device_id empty) under key_id."""
     with get_db() as conn:
-        conn.execute(
-            "DELETE FROM open_tabs WHERE key_id = ? AND device_name = ?",
-            (key_id, device_name),
-        )
+        if device_id:
+            conn.execute(
+                "DELETE FROM open_tabs WHERE key_id = ? AND device_id = ?",
+                (key_id, device_id),
+            )
+        else:
+            conn.execute(
+                "DELETE FROM open_tabs WHERE key_id = ? AND device_name = ?",
+                (key_id, device_name),
+            )
+
         for tab in tabs:
             conn.execute(
-                "INSERT INTO open_tabs (key_id, device_name, url, title, fav_icon_url, updated_at) "
-                "VALUES (?, ?, ?, ?, ?, datetime('now'))",
+                "INSERT INTO open_tabs (key_id, device_id, device_name, url, title, fav_icon_url, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
                 (
                     key_id,
+                    device_id,
                     device_name,
                     tab["url"],
                     tab["title"],
@@ -253,31 +274,51 @@ def replace_open_tabs(key_id: int, device_name: str, tabs: list[dict]) -> None:
             )
 
 
-def get_other_devices_tabs(current_key_id: int, current_device_name: str) -> list[dict]:
+def get_other_devices_tabs(
+    current_key_id: int,
+    current_device_id: str,
+    current_device_name: str,
+) -> list[dict]:
     """Return open tabs grouped by other active devices."""
     with get_db() as conn:
-        rows = conn.execute(
-            """
-            SELECT t.id as tab_id, t.device_name, t.url, t.title, t.fav_icon_url, t.updated_at
-            FROM open_tabs t
-            JOIN api_keys k ON t.key_id = k.id
-            WHERE k.revoked_at IS NULL
-              AND NOT (t.key_id = ? AND t.device_name = ?)
-            ORDER BY t.device_name, t.id
-            """,
-            (current_key_id, current_device_name),
-        ).fetchall()
+        if current_device_id:
+            rows = conn.execute(
+                """
+                SELECT t.id as tab_id, t.device_id, t.device_name, t.url, t.title, t.fav_icon_url, t.updated_at
+                FROM open_tabs t
+                JOIN api_keys k ON t.key_id = k.id
+                WHERE k.revoked_at IS NULL
+                  AND datetime(t.updated_at) >= datetime('now', '-7 days')
+                  AND NOT (t.key_id = ? AND t.device_id = ?)
+                ORDER BY t.device_name, t.id
+                """,
+                (current_key_id, current_device_id),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT t.id as tab_id, t.device_id, t.device_name, t.url, t.title, t.fav_icon_url, t.updated_at
+                FROM open_tabs t
+                JOIN api_keys k ON t.key_id = k.id
+                WHERE k.revoked_at IS NULL
+                  AND datetime(t.updated_at) >= datetime('now', '-7 days')
+                  AND NOT (t.key_id = ? AND t.device_name = ?)
+                ORDER BY t.device_name, t.id
+                """,
+                (current_key_id, current_device_name),
+            ).fetchall()
 
         devices_map: dict[str, dict] = {}
         for r in rows:
-            dname = r["device_name"]
-            if dname not in devices_map:
-                devices_map[dname] = {
-                    "device_id": dname,
+            group_key = r["device_id"] or r["device_name"]
+            dname = r["device_name"] or group_key
+            if group_key not in devices_map:
+                devices_map[group_key] = {
+                    "device_id": group_key,
                     "device_name": dname,
                     "tabs": [],
                 }
-            devices_map[dname]["tabs"].append(
+            devices_map[group_key]["tabs"].append(
                 {
                     "id": r["tab_id"],
                     "url": r["url"],
@@ -288,3 +329,13 @@ def get_other_devices_tabs(current_key_id: int, current_device_name: str) -> lis
             )
 
         return list(devices_map.values())
+
+
+def clear_all_tabs(key_id: int | None = None) -> int:
+    """Delete open tabs. If key_id is provided, delete for that key only; otherwise delete all."""
+    with get_db() as conn:
+        if key_id is not None:
+            cur = conn.execute("DELETE FROM open_tabs WHERE key_id = ?", (key_id,))
+        else:
+            cur = conn.execute("DELETE FROM open_tabs")
+        return cur.rowcount
