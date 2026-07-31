@@ -26,7 +26,7 @@ jobs:
         run: uv python install 3.13
 
       - name: Run Ruff Check
-        run: uv run --directory backend ruff check .
+        run: uv run --directory backend --with ruff ruff check .
 
       - name: Run Ruff Format Check
-        run: uv run --directory backend ruff format --check .
+        run: uv run --directory backend --with ruff ruff format --check .
