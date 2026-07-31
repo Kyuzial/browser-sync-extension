@@ -90,7 +90,7 @@ def parse_datetime_to_ms(dt_str: str | None) -> int | None:
     try:
         dt = datetime.datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
         return int(dt.replace(tzinfo=datetime.timezone.utc).timestamp() * 1000)
-    except Exception:
+    except (ValueError, TypeError):
         return None
 
 

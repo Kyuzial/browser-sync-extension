@@ -49,17 +49,11 @@ def init_db() -> None:
         if "revoked_at" not in columns:
             conn.execute("ALTER TABLE api_keys ADD COLUMN revoked_at TEXT")
 
-        tab_columns = {
-            row["name"] for row in conn.execute("PRAGMA table_info(open_tabs)")
-        }
+        tab_columns = {row["name"] for row in conn.execute("PRAGMA table_info(open_tabs)")}
         if "device_name" not in tab_columns:
-            conn.execute(
-                "ALTER TABLE open_tabs ADD COLUMN device_name TEXT NOT NULL DEFAULT ''"
-            )
+            conn.execute("ALTER TABLE open_tabs ADD COLUMN device_name TEXT NOT NULL DEFAULT ''")
         if "device_id" not in tab_columns:
-            conn.execute(
-                "ALTER TABLE open_tabs ADD COLUMN device_id TEXT NOT NULL DEFAULT ''"
-            )
+            conn.execute("ALTER TABLE open_tabs ADD COLUMN device_id TEXT NOT NULL DEFAULT ''")
 
         # Automatically purge legacy tab entries without a unique device_id attached
         conn.execute("DELETE FROM open_tabs WHERE device_id = ''")
@@ -128,8 +122,7 @@ def delete_api_key(key_id: int) -> bool:
     """Revoke an API key without deleting its associated bookmark data."""
     with get_db() as conn:
         cur = conn.execute(
-            "UPDATE api_keys SET revoked_at = datetime('now') "
-            "WHERE id = ? AND revoked_at IS NULL",
+            "UPDATE api_keys SET revoked_at = datetime('now') WHERE id = ? AND revoked_at IS NULL",
             (key_id,),
         )
         return cur.rowcount > 0
@@ -155,8 +148,7 @@ def upsert_bookmarks(
 
         # Fetch current active bookmarks for this device
         existing_rows = conn.execute(
-            "SELECT id, url, title, folder_path FROM bookmarks "
-            "WHERE key_id = ? AND deleted = 0",
+            "SELECT id, url, title, folder_path FROM bookmarks WHERE key_id = ? AND deleted = 0",
             (key_id,),
         ).fetchall()
         existing = {(r["url"], r["folder_path"]): r for r in existing_rows}
@@ -168,8 +160,7 @@ def upsert_bookmarks(
                 row = existing[key]
                 if row["title"] != bm["title"]:
                     conn.execute(
-                        "UPDATE bookmarks SET title = ?, updated_at = datetime('now') "
-                        "WHERE id = ?",
+                        "UPDATE bookmarks SET title = ?, updated_at = datetime('now') WHERE id = ?",
                         (bm["title"], row["id"]),
                     )
                     updated += 1
@@ -188,8 +179,7 @@ def upsert_bookmarks(
         for key, row in existing.items():
             if key not in incoming:
                 conn.execute(
-                    "UPDATE bookmarks SET deleted = 1, updated_at = datetime('now') "
-                    "WHERE id = ?",
+                    "UPDATE bookmarks SET deleted = 1, updated_at = datetime('now') WHERE id = ?",
                     (row["id"],),
                 )
                 deleted += 1
